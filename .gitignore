@@ -179,3 +179,23 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+
+
+
+
+
+
+
+# Large dataset files
+WELFake_Dataset.csv
+fake-news-classification.zip
+
+# Virtual environment
+venv311/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Model large files
+model/clean_data.csv
