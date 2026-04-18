@@ -44,3 +44,8 @@ __pycache__/
 *.pyc
 =======
 >>>>>>> 36ce14ee11aee9aa04b61be3cd0ed43cfb998614
+
+
+
+# BERT large model file
+model/bert_fakenews/model.safetensors
