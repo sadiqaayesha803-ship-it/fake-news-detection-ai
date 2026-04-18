@@ -1,0 +1,43 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/build
+
+# misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+
+
+# Large dataset files
+WELFake_Dataset.csv
+fake-news-classification.zip
+
+# Virtual environment
+venv311/
+
+# Large model files
+model/clean_data.csv
+
+# PyTorch large files
+*.dll
+
+# Python cache
+__pycache__/
+*.pyc
