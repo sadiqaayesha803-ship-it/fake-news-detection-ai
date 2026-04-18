@@ -21,6 +21,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+<<<<<<< HEAD
 
 
 
@@ -41,3 +42,5 @@ model/clean_data.csv
 # Python cache
 __pycache__/
 *.pyc
+=======
+>>>>>>> 36ce14ee11aee9aa04b61be3cd0ed43cfb998614
