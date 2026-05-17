@@ -1,3 +1,4 @@
+from factcheck import check_facts
 from sentiment import analyze_sentiment
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,7 +110,11 @@ def predict(request: NewsRequest):
 def sentiment(request: NewsRequest):
     result = analyze_sentiment(request.text)
     return result
-
+# Fact Check endpoint
+@app.post("/factcheck")
+def factcheck(request: NewsRequest):
+    result = check_facts(request.text)
+    return result
 # Health check
 @app.get("/health")
 def health():
