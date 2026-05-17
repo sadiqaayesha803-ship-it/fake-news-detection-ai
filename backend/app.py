@@ -1,3 +1,4 @@
+from sentiment import analyze_sentiment
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -104,8 +105,28 @@ def predict(request: NewsRequest):
         confidence=round(confidence, 2),
         model_used=model_used
     )
+@app.post("/sentiment")
+def sentiment(request: NewsRequest):
+    result = analyze_sentiment(request.text)
+    return result
 
 # Health check
 @app.get("/health")
 def health():
     return {"status": "healthy", "models": ["BERT", "Logistic Regression"]}
+
+# Sentiment endpoint
+@app.post("/sentiment")
+def sentiment_api(data: dict):
+
+    text = data.get("text", "")
+
+    if not text.strip():
+        return {
+            "label": "ERROR",
+            "score": 0.0
+        }
+
+    result = analyze_sentiment(text)
+
+    return result
