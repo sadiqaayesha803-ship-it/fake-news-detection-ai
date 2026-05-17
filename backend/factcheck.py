@@ -1,6 +1,7 @@
-import requests
-
-FACT_CHECK_API_KEY = "AIzaSyDRxcjqAdCiqsl4j2HxwFTlLa1TB23UAjc"
+import os
+from dotenv import load_dotenv
+load_dotenv()
+FACT_CHECK_API_KEY = os.getenv("FACT_CHECK_API_KEY")
 FACT_CHECK_URL = "https://factchecktools.googleapis.com/v1alpha1/claims:search"
 
 def check_facts(query):

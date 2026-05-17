@@ -49,3 +49,5 @@ __pycache__/
 
 # BERT large model file
 model/bert_fakenews/model.safetensors
+
+.env
