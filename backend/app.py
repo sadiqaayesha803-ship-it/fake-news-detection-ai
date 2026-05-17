@@ -1,3 +1,4 @@
+from url_analyzer import analyze_url
 from factcheck import check_facts
 from sentiment import analyze_sentiment
 from fastapi import FastAPI
@@ -43,6 +44,8 @@ print("✅ All models loaded!")
 class NewsRequest(BaseModel):
     text: str
     model: str = "bert"  # "bert" or "baseline"
+class URLRequest(BaseModel):
+    url: str
 
 # Response body
 class NewsResponse(BaseModel):
@@ -115,6 +118,12 @@ def sentiment(request: NewsRequest):
 def factcheck(request: NewsRequest):
     result = check_facts(request.text)
     return result
+# URL Analyzer endpoint
+@app.post("/analyze-url")
+def analyze_url_endpoint(request: URLRequest):
+    result = analyze_url(request.url)
+    return result
+
 # Health check
 @app.get("/health")
 def health():
