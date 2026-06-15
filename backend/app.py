@@ -1,7 +1,12 @@
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+from database import get_db, History, Base, engine
+from auth import (authenticate_user, create_user, create_access_token,
+                  verify_token, get_user, get_user_by_email)
 from url_analyzer import analyze_url
 from factcheck import check_facts
 from sentiment import analyze_sentiment
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
@@ -53,6 +58,20 @@ class NewsResponse(BaseModel):
     confidence: float
     model_used: str
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class HistorySaveRequest(BaseModel):
+    article_text: str
+    verdict: str
+    confidence: float
+    model_used: str
 # Root endpoint
 @app.get("/")
 def home():
@@ -128,6 +147,102 @@ def analyze_url_endpoint(request: URLRequest):
 @app.get("/health")
 def health():
     return {"status": "healthy", "models": ["BERT", "Logistic Regression"]}
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# Register endpoint
+@app.post("/register")
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    # Check if username exists
+    if get_user(db, request.username):
+        return {"error": "Username already exists"}
+
+    # Check if email exists
+    if get_user_by_email(db, request.email):
+        return {"error": "Email already exists"}
+
+    # Create user
+    user = create_user(db, request.username, request.email, request.password)
+    token = create_access_token({"sub": user.username})
+
+    return {
+        "message": "Registration successful!",
+        "token": token,
+        "username": user.username,
+        "id": user.id
+    }
+
+# Login endpoint
+@app.post("/login")
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    user = authenticate_user(db, request.username, request.password)
+    if not user:
+        return {"error": "Invalid username or password"}
+
+    token = create_access_token({"sub": user.username})
+
+    return {
+        "message": "Login successful!",
+        "token": token,
+        "username": user.username,
+        "id": user.id
+    }
+
+# Save history endpoint
+@app.post("/history/save")
+def save_history(
+    request: HistorySaveRequest,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    username = verify_token(token)
+    if not username:
+        return {"error": "Invalid token"}
+
+    user = get_user(db, username)
+    if not user:
+        return {"error": "User not found"}
+
+    history = History(
+        user_id=user.id,
+        article_text=request.article_text[:500],
+        verdict=request.verdict,
+        confidence=request.confidence,
+        model_used=request.model_used
+    )
+    db.add(history)
+    db.commit()
+
+    return {"message": "History saved!"}
+
+# Get history endpoint
+@app.get("/history/{user_id}")
+def get_history(
+    user_id: int,
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db)
+):
+    username = verify_token(token)
+    if not username:
+        return {"error": "Invalid token"}
+
+    records = db.query(History).filter(
+        History.user_id == user_id
+    ).order_by(History.created_at.desc()).limit(20).all()
+
+    return {
+        "history": [
+            {
+                "id": r.id,
+                "article_text": r.article_text[:100] + "...",
+                "verdict": r.verdict,
+                "confidence": r.confidence,
+                "model_used": r.model_used,
+                "date": r.created_at.strftime("%Y-%m-%d %H:%M")
+            }
+            for r in records
+        ]
+    }
 
 # Sentiment endpoint
 @app.post("/sentiment")
