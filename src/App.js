@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import ResultCard from './ResultCard';
+import AuthPage from './AuthPage';
+import HistoryPage from './HistoryPage';
 import './App.css';
 
 const API = 'http://192.168.100.72:8000';
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [page, setPage] = useState('home');
   const [newsText, setNewsText] = useState('');
   const [author, setAuthor] = useState('');
   const [result, setResult] = useState(null);
@@ -15,6 +19,17 @@ function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    setPage('home');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setResult(null);
+    setPage('home');
+  };
 
   const checkNews = async () => {
     if (!newsText.trim()) {
@@ -38,6 +53,20 @@ function App() {
       setSentiment(sentimentRes.data);
       setFactcheck(factcheckRes.data);
 
+      if (user) {
+        await axios.post(`${API}/history/save`,
+          {
+            article_text: newsText,
+            verdict: predictRes.data.verdict,
+            confidence: predictRes.data.confidence,
+            model_used: predictRes.data.model_used
+          },
+          {
+            headers: { Authorization: `Bearer ${user.token}` }
+          }
+        );
+      }
+
     } catch (err) {
       setError('❌ Cannot connect to API. Make sure backend is running!');
     } finally {
@@ -55,12 +84,52 @@ function App() {
     }
   };
 
+  // Show login page if not logged in
+  if (!user) return <AuthPage onLogin={handleLogin} />;
+
+  // Show history page
+  if (page === 'history') {
+    return <HistoryPage user={user} onBack={() => setPage('home')} />;
+  }
+
   return (
     <div className="App">
       {/* Navbar */}
       <nav className="navbar">
         <h1>🔍 Fake News Detector</h1>
-        <span>Powered by BERT AI</span>
+        <div>
+          <span style={{ marginRight: '15px', color: 'white' }}>
+            👤 {user.username}
+          </span>
+          <button
+            className="nav-btn"
+            onClick={() => setPage('history')}
+            style={{
+              marginRight: '10px',
+              padding: '8px 15px',
+              backgroundColor: '#34495e',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            📋 My History
+          </button>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '8px 15px',
+              backgroundColor: '#e74c3c',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            🚪 Logout
+          </button>
+        </div>
       </nav>
 
       <div className="container">
@@ -70,7 +139,6 @@ function App() {
         {/* Author Input */}
         <input
           type="text"
-          className="author-input"
           placeholder="Enter author or publisher name (optional)..."
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
