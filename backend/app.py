@@ -29,19 +29,39 @@ app.add_middleware(
 # Load models on startup
 print("⏳ Loading models...")
 
-# Load BERT model
+# Load BERT model (only if available)
+BERT_AVAILABLE = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-bert_model = BertForSequenceClassification.from_pretrained('../model/bert_fakenews')
-bert_tokenizer = BertTokenizer.from_pretrained('../model/bert_fakenews')
-bert_model = bert_model.to(device)
-bert_model.eval()
+
+bert_model_path = os.path.join(os.path.dirname(__file__), '..', 'model', 'bert_fakenews')
+
+if os.path.exists(bert_model_path):
+    try:
+        bert_model = BertForSequenceClassification.from_pretrained(bert_model_path)
+        bert_tokenizer = BertTokenizer.from_pretrained(bert_model_path)
+        bert_model = bert_model.to(device)
+        bert_model.eval()
+        BERT_AVAILABLE = True
+        print("✅ BERT model loaded!")
+    except Exception as e:
+        print(f"⚠️ BERT model not available: {e}")
+        BERT_AVAILABLE = False
+else:
+    print("⚠️ BERT model not found — using baseline model only")
 
 # Load baseline model
-with open('../model/baseline_model.pkl', 'rb') as f:
-    baseline_model = pickle.load(f)
-
-with open('../model/tfidf_vectorizer.pkl', 'rb') as f:
-    tfidf = pickle.load(f)
+try:
+    baseline_path = os.path.join(os.path.dirname(__file__), '..', 'model', 'baseline_model.pkl')
+    tfidf_path = os.path.join(os.path.dirname(__file__), '..', 'model', 'tfidf_vectorizer.pkl')
+    with open(baseline_path, 'rb') as f:
+        baseline_model = pickle.load(f)
+    with open(tfidf_path, 'rb') as f:
+        tfidf = pickle.load(f)
+    print("✅ Baseline model loaded!")
+except Exception as e:
+    print(f"⚠️ Baseline model error: {e}")
+    baseline_model = None
+    tfidf = None
 
 print("✅ All models loaded!")
 
@@ -81,53 +101,37 @@ def home():
 @app.post("/predict", response_model=NewsResponse)
 def predict(request: NewsRequest):
     text = request.text.strip()
-
     if not text:
-        return NewsResponse(
-            verdict="ERROR",
-            confidence=0.0,
-            model_used="none"
-        )
+        return NewsResponse(verdict="ERROR", confidence=0.0, model_used="none")
 
-    if request.model == "bert":
-        # BERT prediction
+    # Use BERT if available, otherwise use baseline
+    if BERT_AVAILABLE and request.model == "bert":
         encoding = bert_tokenizer(
-            text,
-            max_length=128,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
+            text, max_length=128, padding='max_length',
+            truncation=True, return_tensors='pt'
         )
-
         input_ids = encoding['input_ids'].to(device)
         attention_mask = encoding['attention_mask'].to(device)
-
         with torch.no_grad():
-            outputs = bert_model(
-                input_ids=input_ids,
-                attention_mask=attention_mask
-            )
+            outputs = bert_model(input_ids=input_ids, attention_mask=attention_mask)
             probs = torch.softmax(outputs.logits, dim=1)
             pred = torch.argmax(probs, dim=1).item()
             confidence = probs[0][pred].item() * 100
-
         verdict = "FAKE" if pred == 1 else "REAL"
         model_used = "BERT"
-
     else:
-        # Baseline prediction
-        text_tfidf = tfidf.transform([text])
-        pred = baseline_model.predict(text_tfidf)[0]
-        proba = baseline_model.predict_proba(text_tfidf)[0]
-        confidence = max(proba) * 100
-        verdict = "FAKE" if pred == 1 else "REAL"
-        model_used = "Logistic Regression"
+        # Fallback to baseline
+        if baseline_model and tfidf:
+            text_tfidf = tfidf.transform([text])
+            pred = baseline_model.predict(text_tfidf)[0]
+            proba = baseline_model.predict_proba(text_tfidf)[0]
+            confidence = max(proba) * 100
+            verdict = "FAKE" if pred == 1 else "REAL"
+            model_used = "Logistic Regression"
+        else:
+            return NewsResponse(verdict="ERROR", confidence=0.0, model_used="none")
 
-    return NewsResponse(
-        verdict=verdict,
-        confidence=round(confidence, 2),
-        model_used=model_used
-    )
+    return NewsResponse(verdict=verdict, confidence=round(confidence, 2), model_used=model_used)
 @app.post("/sentiment")
 def sentiment(request: NewsRequest):
     result = analyze_sentiment(request.text)
