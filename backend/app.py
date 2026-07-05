@@ -20,53 +20,95 @@ app.add_middleware(
 )
 
 # ============================================================
-# LOAD MODELS ON STARTUP
+# FIND MODEL DIRECTORY
 # ============================================================
 print("⏳ Loading models...")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+print(f"BASE_DIR: {BASE_DIR}")
 
-# Load BERT model (only if available locally)
+# Try every possible path Railway might use
+possible_model_dirs = [
+    os.path.join(BASE_DIR, 'model'),        # /app/model (backend/model)
+    os.path.join(BASE_DIR, '..', 'model'),  # /app/../model
+    '/app/model',
+    '/app/backend/model',
+    os.path.join(os.getcwd(), 'model'),
+    os.path.join(os.getcwd(), '..', 'model'),
+]
+
+model_dir = None
+for path in possible_model_dirs:
+    abs_path = os.path.abspath(path)
+    print(f"Checking: {abs_path}")
+    if os.path.exists(abs_path):
+        files = os.listdir(abs_path)
+        print(f"Found dir: {abs_path}, files: {files}")
+        if 'baseline_model.pkl' in files:
+            model_dir = abs_path
+            print(f"✅ Model dir found: {abs_path}")
+            break
+
+if not model_dir:
+    print("❌ Model directory not found! Searching entire /app...")
+    # Search entire filesystem for the pkl file
+    for root, dirs, files in os.walk('/app'):
+        if 'baseline_model.pkl' in files:
+            model_dir = root
+            print(f"✅ Found model at: {root}")
+            break
+
+# ============================================================
+# LOAD BERT MODEL
+# ============================================================
 BERT_AVAILABLE = False
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 bert_model = None
 bert_tokenizer = None
 
-bert_model_path = os.path.join(BASE_DIR, '..', 'model', 'bert_fakenews')
-if os.path.exists(bert_model_path):
-    try:
-        from transformers import BertTokenizer, BertForSequenceClassification
-        bert_model = BertForSequenceClassification.from_pretrained(bert_model_path)
-        bert_tokenizer = BertTokenizer.from_pretrained(bert_model_path)
-        bert_model = bert_model.to(device)
-        bert_model.eval()
-        BERT_AVAILABLE = True
-        print("✅ BERT model loaded!")
-    except Exception as e:
-        print(f"⚠️ BERT not available: {e}")
-        BERT_AVAILABLE = False
-else:
-    print("⚠️ BERT model not found — using baseline model only")
+if model_dir:
+    bert_model_path = os.path.join(model_dir, 'bert_fakenews')
+    if os.path.exists(bert_model_path):
+        try:
+            from transformers import BertTokenizer, BertForSequenceClassification
+            bert_model = BertForSequenceClassification.from_pretrained(bert_model_path)
+            bert_tokenizer = BertTokenizer.from_pretrained(bert_model_path)
+            bert_model = bert_model.to(device)
+            bert_model.eval()
+            BERT_AVAILABLE = True
+            print("✅ BERT model loaded!")
+        except Exception as e:
+            print(f"⚠️ BERT not available: {e}")
+    else:
+        print("⚠️ BERT model folder not found — using baseline only")
 
-# Load baseline model
+# ============================================================
+# LOAD BASELINE MODEL
+# ============================================================
 baseline_model = None
 tfidf = None
-try:
-    baseline_path = os.path.join(BASE_DIR, '..', 'model', 'baseline_model.pkl')
-    tfidf_path = os.path.join(BASE_DIR, '..', 'model', 'tfidf_vectorizer.pkl')
-    with open(baseline_path, 'rb') as f:
-        baseline_model = pickle.load(f)
-    with open(tfidf_path, 'rb') as f:
-        tfidf = pickle.load(f)
-    print("✅ Baseline model loaded!")
-except Exception as e:
-    print(f"⚠️ Baseline model error: {e}")
 
-print("✅ All models loaded!")
+if model_dir:
+    try:
+        baseline_path = os.path.join(model_dir, 'baseline_model.pkl')
+        tfidf_path = os.path.join(model_dir, 'tfidf_vectorizer.pkl')
+        print(f"Loading baseline from: {baseline_path}")
+        with open(baseline_path, 'rb') as f:
+            baseline_model = pickle.load(f)
+        with open(tfidf_path, 'rb') as f:
+            tfidf = pickle.load(f)
+        print("✅ Baseline model loaded!")
+    except Exception as e:
+        print(f"⚠️ Baseline model error: {e}")
+else:
+    print("❌ Cannot load baseline model - model_dir not found")
+
+print("✅ Startup complete!")
 
 # ============================================================
 # DATABASE SETUP
 # ============================================================
+DB_AVAILABLE = False
 try:
     from database import get_db, History, Base, engine
     from auth import (authenticate_user, create_user, create_access_token,
@@ -75,31 +117,30 @@ try:
     print("✅ Database ready!")
 except Exception as e:
     print(f"⚠️ Database error: {e}")
-    DB_AVAILABLE = False
 
 # ============================================================
 # OTHER MODULES
 # ============================================================
+SENTIMENT_AVAILABLE = False
 try:
     from sentiment import analyze_sentiment
     SENTIMENT_AVAILABLE = True
 except Exception as e:
     print(f"⚠️ Sentiment error: {e}")
-    SENTIMENT_AVAILABLE = False
 
+FACTCHECK_AVAILABLE = False
 try:
     from factcheck import check_facts
     FACTCHECK_AVAILABLE = True
 except Exception as e:
     print(f"⚠️ Factcheck error: {e}")
-    FACTCHECK_AVAILABLE = False
 
+URL_AVAILABLE = False
 try:
     from url_analyzer import analyze_url
     URL_AVAILABLE = True
 except Exception as e:
     print(f"⚠️ URL analyzer error: {e}")
-    URL_AVAILABLE = False
 
 # ============================================================
 # REQUEST/RESPONSE MODELS
@@ -136,22 +177,24 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 # ============================================================
 # ENDPOINTS
 # ============================================================
-
 @app.get("/")
 def home():
     return {
         "message": "Fake News Detector API is running!",
         "bert_available": BERT_AVAILABLE,
         "baseline_available": baseline_model is not None,
-        "db_available": DB_AVAILABLE
+        "db_available": DB_AVAILABLE,
+        "model_dir": model_dir,
+        "base_dir": BASE_DIR,
+        "cwd": os.getcwd()
     }
 
 @app.get("/health")
 def health():
     return {
         "status": "healthy",
-        "models": ["BERT" if BERT_AVAILABLE else "BERT (not loaded)", "Logistic Regression"],
         "bert_available": BERT_AVAILABLE,
+        "baseline_available": baseline_model is not None,
         "db_available": DB_AVAILABLE
     }
 
@@ -161,7 +204,8 @@ def predict(request: NewsRequest):
     if not text:
         return NewsResponse(verdict="ERROR", confidence=0.0, model_used="none")
 
-    if BERT_AVAILABLE and request.model == "bert" and bert_model and bert_tokenizer:
+    # Try BERT first
+    if BERT_AVAILABLE and bert_model and bert_tokenizer:
         try:
             encoding = bert_tokenizer(
                 text, max_length=128, padding='max_length',
@@ -175,13 +219,9 @@ def predict(request: NewsRequest):
                 pred = torch.argmax(probs, dim=1).item()
                 confidence = probs[0][pred].item() * 100
             verdict = "FAKE" if pred == 1 else "REAL"
-            model_used = "BERT"
+            return NewsResponse(verdict=verdict, confidence=round(confidence, 2), model_used="BERT")
         except Exception as e:
-            print(f"BERT prediction error: {e}")
-            # Fall through to baseline
-            BERT_AVAILABLE_LOCAL = False
-        else:
-            return NewsResponse(verdict=verdict, confidence=round(confidence, 2), model_used=model_used)
+            print(f"BERT error: {e}")
 
     # Baseline fallback
     if baseline_model and tfidf:
@@ -191,10 +231,9 @@ def predict(request: NewsRequest):
             proba = baseline_model.predict_proba(text_tfidf)[0]
             confidence = max(proba) * 100
             verdict = "FAKE" if pred == 1 else "REAL"
-            model_used = "Logistic Regression"
-            return NewsResponse(verdict=verdict, confidence=round(confidence, 2), model_used=model_used)
+            return NewsResponse(verdict=verdict, confidence=round(confidence, 2), model_used="Logistic Regression")
         except Exception as e:
-            print(f"Baseline prediction error: {e}")
+            print(f"Baseline error: {e}")
 
     return NewsResponse(verdict="ERROR", confidence=0.0, model_used="none")
 
