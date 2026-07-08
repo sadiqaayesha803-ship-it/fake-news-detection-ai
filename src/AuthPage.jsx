@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const API = 'http://192.168.100.72:8000';
+const API = 'https://fake-news-detection-ai-production.up.railway.app';
 
 function AuthPage({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true);

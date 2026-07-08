@@ -5,7 +5,7 @@ import AuthPage from './AuthPage';
 import HistoryPage from './HistoryPage';
 import './App.css';
 
-const API = 'http://192.168.100.72:8000';
+const API = 'https://fake-news-detection-ai-production.up.railway.app';
 
 function App() {
   const [user, setUser] = useState(null);
