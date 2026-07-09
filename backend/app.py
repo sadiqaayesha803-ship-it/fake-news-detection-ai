@@ -338,3 +338,43 @@ def get_history(
             for r in records
         ]
     }
+
+# Admin endpoint - get all users
+@app.get("/admin/users")
+def get_all_users(db: Session = Depends(get_db)):
+    from database import User
+    users = db.query(User).all()
+    return {
+        "total_users": len(users),
+        "users": [
+            {
+                "id": u.id,
+                "username": u.username,
+                "email": u.email,
+                "created_at": u.created_at.strftime("%Y-%m-%d %H:%M")
+            }
+            for u in users
+        ]
+    }
+
+# Admin endpoint - get all history
+@app.get("/admin/history")
+def get_all_history(db: Session = Depends(get_db)):
+    records = db.query(History).order_by(History.created_at.desc()).all()
+    return {
+        "total_checks": len(records),
+        "fake_count": len([r for r in records if r.verdict == "FAKE"]),
+        "real_count": len([r for r in records if r.verdict == "REAL"]),
+        "history": [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "article_text": r.article_text[:100] + "...",
+                "verdict": r.verdict,
+                "confidence": r.confidence,
+                "model_used": r.model_used,
+                "date": r.created_at.strftime("%Y-%m-%d %H:%M")
+            }
+            for r in records
+        ]
+    }

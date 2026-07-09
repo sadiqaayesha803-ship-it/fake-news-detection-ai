@@ -1,4 +1,5 @@
 /* eslint-disable */
+import AdminPage from './AdminPage';
 import React, { useState } from 'react';
 import axios from 'axios';
 import ResultCard from './ResultCard';
@@ -20,6 +21,7 @@ function App() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const handleLogin = (userData) => {
     setUser(userData);
@@ -85,6 +87,7 @@ function App() {
     }
   };
 
+  if (showAdmin) return <AdminPage onBack={() => setShowAdmin(false)} />;
   // Show login page if not logged in
   if (!user) return <AuthPage onLogin={handleLogin} />;
 
@@ -115,6 +118,20 @@ function App() {
               cursor: 'pointer'
             }}
           >
+<button
+  onClick={() => setShowAdmin(true)}
+  style={{
+    marginRight: '10px',
+    padding: '8px 15px',
+    backgroundColor: '#1A56DB',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer'
+  }}
+>
+  ⚙️ Admin
+</button>
             📋 My History
           </button>
           <button
